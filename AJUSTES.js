@@ -147,6 +147,7 @@ if (nombreHoja === "ENTRADAS") {
   }
   return;
 }
+
   /**
    * 📍 [HOJA]   : "AJUSTES"
    * 🚀 [ACCIÓN] : Ejecuta Limpieza Maestra desde A1 y fechado dinámico en Columna I
