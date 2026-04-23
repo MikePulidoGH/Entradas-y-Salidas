@@ -1,0 +1,5 @@
+Script-Respaldo.js
+# También es recomendable ignorar estos para evitar conflictos:
+.clasp.json
+appsscript.json
+node_modules/
