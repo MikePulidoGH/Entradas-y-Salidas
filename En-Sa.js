@@ -48,7 +48,7 @@ function onEditInstalado(e) {
     if (filaInicio === 2) {
       const valor = e.range.getValue();
       if (colInicio === 2 && valor === true) { e.range.setValue(false); finalizarJornadaReciente(); }
-* 🚀 [ACCIÓN] : Normaliza nombres a "Juan Perez", gestiona fechas en bloque y borrado automático [8-10].
+/* 🚀 [ACCIÓN] : Normaliza nombres a "Juan Perez", gestiona fechas en bloque y borrado automático [8-10].*/
       if (colInicio === 6 && valor === true) { e.range.setValue(false); extenderTabla150(hoja); }
       if (colInicio === 7 && valor === true) { e.range.setValue(false); aplicarCuadriculaTotal(hoja); }
       return;
