@@ -1,0 +1,13 @@
+# Ignorar cosas del sistema
+node_modules/
+.git/
+.local/
+
+# Ignorar archivos ocultos
+.*
+
+# PERMITIR lo importante
+!appsscript.json
+!*.js
+!*.gs
+!*.html
