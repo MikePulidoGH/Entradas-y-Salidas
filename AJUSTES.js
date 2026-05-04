@@ -1,9 +1,10 @@
 /**
-	 * SISTEMA SALIDAS v11.0 - VERSIÓN FINAL ESTABILIZADA
+ * SISTEMA SALIDAS v11.0 - VERSIÓN FINAL ESTABILIZADA
  */
 
 // ── WEBHOOK ÚNICO ──────────────────────────────────────────────────────────
 const WEBHOOK_DISCORD = "https://discordapp.com/api/webhooks/1463548831915442322/Fd4MEYgwVtxz0vo8o4AR11CeMP_NsL3CTyXp83ai9Emv4vp30So4STq14a45PNkvvUiN";
+
 
 // ── ON EDIT ────────────────────────────────────────────────────────────────
 /**
@@ -13,7 +14,7 @@ const WEBHOOK_DISCORD = "https://discordapp.com/api/webhooks/1463548831915442322
  */
 function onEditInstalado(e) {
   if (!e || !e.range) return;
-												
+
   const hoja       = e.range.getSheet();
   const nombreHoja = hoja.getName();
   const filaInicio = e.range.getRow();
@@ -43,12 +44,12 @@ function onEditInstalado(e) {
   /**
    * 📍 [HOJA]   : "SALIDAS"
    * 🎮 [BOTONES]: Checkboxes en Fila 2 (Cierre de día, Extender tabla, Cuadrícula) [6, 7].
+   * 🚀 [ACCIÓN] : Normaliza nombres a "Juan Perez", gestiona fechas en bloque y borrado automático [8-10].
    */
   if (nombreHoja === "SALIDAS") {
     if (filaInicio === 2) {
       const valor = e.range.getValue();
       if (colInicio === 2 && valor === true) { e.range.setValue(false); finalizarJornadaReciente(); }
-/* 🚀 [ACCIÓN] : Normaliza nombres a "Juan Perez", gestiona fechas en bloque y borrado automático [8-10].*/
       if (colInicio === 6 && valor === true) { e.range.setValue(false); extenderTabla150(hoja); }
       if (colInicio === 7 && valor === true) { e.range.setValue(false); aplicarCuadriculaTotal(hoja); }
       return;
@@ -147,47 +148,75 @@ if (nombreHoja === "ENTRADAS") {
   }
   return;
 }
+ // --- 4. AJUSTES (LIMPIEZA B-C-I Y FECHADO DINÁMICO) ---
+  if (nombreHoja === "AJUSTES") {
+    const valorActual = e.range.getValue();
 
-  /**
-   * 📍 [HOJA]   : "AJUSTES"
-   * 🚀 [ACCIÓN] : Ejecuta Limpieza Maestra desde A1 y fechado dinámico en Columna I
-   */
-  // --- 4. AJUSTES (LIMPIEZA Y TRANSFERENCIA) ---
- if (nombreHoja === "AJUSTES") {
+    // A. LIMPIEZA MAESTRA (Celda A1)
+    // Regla: Solo limpia columnas B, C e I de las filas 2 a 50
+    if (filaInicio === 1 && colInicio === 1 && valorActual === true) {
+      hoja.getRange("B2:C50").clearContent(); // Limpia Columnas B y C
+      hoja.getRange("I2:I50").clearContent(); // Limpia Columna I
+      e.range.setValue(false); // Resetea el botón A1
+      SpreadsheetApp.flush();
+      return;
+    }
+
+    // B. FECHADO DINÁMICO (Columnas B o C - Filas 2 a 50)
+    // Si se edita el Código (B) o la Cantidad (C), actualiza o pone la fecha en I
+    if (filaInicio >= 2 && filaInicio <= 50 && (colInicio === 2 || colInicio === 3)) {
+      const celdaFecha = hoja.getRange(filaInicio, 9); // Columna I
+      if (valorActual !== "") {
+        celdaFecha.setValue(new Date()).setNumberFormat("dd/mm/yyyy HH:mm");
+      } else {
+        celdaFecha.clearContent();
+      }
+    }
+
+    // C. PROCESAR AJUSTE (Checkbox columna A - Filas 2 a 50)
+    if (filaInicio >= 2 && filaInicio <= 50 && colInicio === 1 && valorActual === true) {
+      const codigo   = hoja.getRange(filaInicio, 2).getValue(); // Columna B
+      const valorE   = hoja.getRange(filaInicio, 5).getValue(); // Columna E (Valor solicitado)
+      const producto = hoja.getRange(filaInicio, 8).getValue(); // Columna H
+      
+      if (producto !== "") {
+        const ss = SpreadsheetApp.getActive();
+        const hojaDestino = ss.getSheetByName("SL AJUSTES");
+        
+        if (hojaDestino) {
+          // Se mantiene el mapeo: Ajuste | Código | Valor E | Producto | Fecha
+          hojaDestino.appendRow(["Ajuste", codigo, valorE, producto, new Date()]);
+          
+          // Aplicar cuadrícula a la fila nueva en destino
+          const filaNueva = hojaDestino.getLastRow();
+          hojaDestino.getRange(filaNueva, 1, 1, 5)
+            .setBorder(true, true, true, true, true, true, "black", SpreadsheetApp.BorderStyle.SOLID);
+          
+          ss.toast("✅ Enviado a SL AJUSTES: " + producto);
+        }
+      }
+      e.range.setValue(false); // Apaga el checkbox de origen
+    }
+    return;
+  }
+}
+/**
+ * 🚀 EJECUTA ESTA FUNCIÓN PARA ACTIVAR EL SISTEMA
+ */
+function instalarTrigger() {
+  const ss = SpreadsheetApp.getActive();
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => ScriptApp.deleteTrigger(t));
   
-  // A. LIMPIEZA MAESTRA (Celda A1)
-  if (filaInicio === 1 && colInicio === 1 && e.range.getValue() === true) {
-    hoja.getRange("B2:C50").clearContent();
-    hoja.getRange("I2:I50").clearContent(); // <-- AGREGAR ESTA LÍNEA [1, 3]
-    e.range.setValue(false);
-    SpreadsheetApp.flush();
-    return; // Finaliza tras limpiar
-  }
-
-  // B. FECHADO DINÁMICO (Columnas B o C)
-  if (filaInicio >= 2 && (colInicio === 2 || colInicio === 3)) {
-    const valorB = hoja.getRange(filaInicio, 2).getValue();
-    const valorC = hoja.getRange(filaInicio, 3).getValue();
-    const celdaFecha = hoja.getRange(filaInicio, 9); // Columna I [4, 8]
-    
-    if (valorB !== "" || valorC !== "") {
-      celdaFecha.setValue(new Date()).setNumberFormat("dd/mm/yyyy HH:mm");
-    } else {
-      celdaFecha.clearContent();
-    }
-  }
-
-  // C. ENVÍO A "SL AJUSTES" (Checkboxes desde Fila 3, Columna A)
-  if (filaInicio >= 2 && colInicio === 1) {
-    const valorCheckbox = e.range.getValue();
-    if (valorCheckbox === true) {
-      // Esta función es la que mueve los datos a la otra hoja [6, 9]
-      procesarHojaAjustes(hoja, filaInicio, colInicio, valorCheckbox, e.range);
-    }
-  }
-  return; 
+  ScriptApp.newTrigger('onEditInstalado')
+      .forSpreadsheet(ss)
+      .onEdit()
+      .create();
+      
+  SpreadsheetApp.getUi().alert("✅ Sistema Activado. Ya puedes probar la hoja AJUSTES.");
 }
-}
+
+
 // ── ON OPEN ────────────────────────────────────────────────────────────────
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -317,20 +346,33 @@ function aplicarCuadriculaTotal(hoja) {
   SpreadsheetApp.getActiveSpreadsheet().toast("✅ Cuadrícula y fórmulas restauradas hasta la columna G", "SISTEMA");
 }
 
-function procesarHojaAjustes(hoja, fila, col, valor, celda) {
-  if (col === 1 && valor === true) {
-    const codigo  = hoja.getRange(fila, 2).getValue();
-    const cant    = hoja.getRange(fila, 5).getValue();
-    const prod    = hoja.getRange(fila, 8).getValue();
-    const ss      = SpreadsheetApp.getActiveSpreadsheet();
-    const destino = ss.getSheetByName("SL AJUSTES");
-    if (destino && codigo && cant) {
-      destino.appendRow(["Ajuste", codigo, cant, prod, new Date()]);
-      aplicarFormatoFila(destino.getRange(destino.getLastRow(), 1, 1, 5));
-      celda.setValue(false);
-      ss.toast("Enviado a AJUSTES", "✅");
-    }
+// ==========================================
+// 🚀 FUNCIÓN DE ENVÍO CORREGIDA
+// ==========================================
+function ejecutarEnvioAjuste(producto, cantidad, fila, range, hoja) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const destino = ss.getSheetByName("SL AJUSTES");
+  
+  if (!destino) {
+    SpreadsheetApp.getUi().alert("No se encontró la hoja SL AJUSTES");
+    return;
   }
+
+  // Enviamos los datos
+  destino.appendRow([
+    new Date(), 
+    "AJUSTE MANUAL", 
+    producto, 
+    cantidad, 
+    "PROCESADO"
+  ]);
+
+  // --- LA CLAVE: LIMPIEZA POST-ENVÍO ---
+  hoja.getRange(fila, 2, 1, 2).clearContent(); // Borra B y C
+  hoja.getRange(fila, 9).clearContent();      // Borra fecha en I
+  range.setValue(false);                      // Desmarca el Check en A
+  
+  ss.toast("✅ Ajuste de '" + producto + "' enviado y fila limpia.");
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────────
@@ -468,20 +510,7 @@ function testFinalDiscord() {
     console.error("Error: " + e.toString());
   }
 }
-  // Borra triggers viejos de onEdit para no duplicar
-function instalarTrigger() {
-  const triggers = ScriptApp.getProjectTriggers();
-  for (let t of triggers) {
-    if (t.getHandlerFunction() === "onEditInstalado") {
-      ScriptApp.deleteTrigger(t);
-    }
-  }
-  // Instala el nuevo
-  ScriptApp.newTrigger("onEditInstalado")
-    .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
-    .onEdit()
-    .create();
-}
+
 /**
  * REVISOR ULTRA-RÁPIDO PARA SALIDAS
  * Diseñado para detectar cambios externos al instante.
@@ -491,12 +520,12 @@ function ejecutorDeFechasAutomaticas(e) {
   const hoja = ss.getSheetByName("SALIDAS");
   if (!hoja) return;
 
-  // Solo revisamos las últimas 350 filas para que sea "al toque" 
+  // Solo revisamos las últimas 20 filas para que sea "al toque" 
   // y no pierda tiempo procesando miles de filas viejas.
   const ultimaFila = hoja.getLastRow();
   if (ultimaFila < 3) return;
   
-  const filasARevisar = 350; // Ajusta este número según cuántas filas pegues de golpe
+  const filasARevisar = 20; // Ajusta este número según cuántas filas pegues de golpe
   const inicio = Math.max(3, ultimaFila - filasARevisar + 1);
   const cantidad = ultimaFila - inicio + 1;
 
