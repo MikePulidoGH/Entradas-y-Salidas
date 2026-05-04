@@ -230,53 +230,88 @@ function enviarADiscord(titulo, detalle, color) {
 
 // ── SALIDAS: FUNCIONES DE SOPORTE ─────────────────────────────────────────
 function finalizarJornadaReciente() {
-  const ss         = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja       = ss.getSheetByName("SALIDAS");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = ss.getSheetByName("SALIDAS");
   if (!hoja) return;
 
-  const ultimaFila = hoja.getLastRow();
-  if (ultimaFila <= 2) return;
+  const FILA_INICIO = 3;
+  const COL_A = 1;
+  const COL_B = 2;
+  const COL_D = 4;
+  const COL_E = 5;
+  const TOTAL_COLS = 7;
+  const MARCA_CIERRE = "DIA CERRADO";
 
-  const datosB  = hoja.getRange(3, 2, ultimaFila - 2).getValues();
-  let filaFinal = -1;
-  let fechaE    = new Date();
+  let ultimaFila = hoja.getLastRow();
+  if (ultimaFila < FILA_INICIO) return;
 
-  for (let i = datosB.length - 1; i >= 0; i--) {
-    if (datosB[i][0] !== "") {
-      filaFinal = i + 3;
-      const valFecha = hoja.getRange(filaFinal, 5).getValue();
+  let fila = FILA_INICIO;
+  let cierres = 0;
+
+  while (fila <= ultimaFila) {
+    const valorB = hoja.getRange(fila, COL_B).getValue();
+
+    if (valorB === "") {
+      fila++;
+      continue;
+    }
+
+    const inicioBloque = fila;
+    let finBloque = fila;
+    const fechaBase = hoja.getRange(fila, COL_E).getValue();
+
+    while (finBloque + 1 <= ultimaFila) {
+      const siguienteB = hoja.getRange(finBloque + 1, COL_B).getValue();
+      const siguienteFecha = hoja.getRange(finBloque + 1, COL_E).getValue();
+      const mismaFecha = (fechaBase instanceof Date && siguienteFecha instanceof Date)
+        ? fechaBase.toDateString() === siguienteFecha.toDateString()
+        : false;
+
+      if (siguienteB !== "" && mismaFecha) finBloque++;
+      else break;
+    }
+
+    const filaSiguiente = finBloque + 1;
+    let yaCerrado = false;
+    if (filaSiguiente <= hoja.getMaxRows()) {
+      const marca = String(hoja.getRange(filaSiguiente, COL_D).getValue()).trim().toUpperCase();
+      yaCerrado = marca === MARCA_CIERRE;
+    }
+
+    if (!yaCerrado) {
+      let fechaE = new Date();
+      const valFecha = hoja.getRange(finBloque, COL_E).getValue();
       if (valFecha instanceof Date) fechaE = valFecha;
-      break;
+
+      hoja.getRange(inicioBloque, 1, (finBloque - inicioBloque) + 1).shiftRowGroupDepth(1);
+
+      hoja.insertRowAfter(finBloque);
+      const filaGris = finBloque + 1;
+      const rangoGris = hoja.getRange(filaGris, 1, 1, TOTAL_COLS);
+
+      try { rangoGris.shiftRowGroupDepth(-1); } catch (err) {}
+
+      hoja.getRange(filaGris, COL_D).setValue(MARCA_CIERRE).setFontWeight("bold");
+      hoja.getRange(filaGris, COL_E).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
+      rangoGris.setBackground("#f3f3f3");
+      aplicarFormatoFila(rangoGris);
+
+      hoja.insertRowsAfter(filaGris, 5);
+      const rangoAire = hoja.getRange(filaGris + 1, 1, 5, TOTAL_COLS);
+      hoja.getRange(FILA_INICIO, 1, 1, TOTAL_COLS).copyTo(rangoAire);
+      rangoAire.clearContent();
+      aplicarFormatoFila(rangoAire);
+
+      cierres++;
+      fila = filaGris + 6;
+      ultimaFila = hoja.getLastRow();
+    } else {
+      fila = finBloque + 1;
     }
   }
-  if (filaFinal === -1) return;
 
-  let filaInicio = filaFinal;
-  for (let j = filaFinal; j >= 3; j--) {
-    if (hoja.getRange(j, 2).getValue() !== "") filaInicio = j;
-    else break;
-  }
-
-  try {
-    hoja.getRange(filaInicio, 1, (filaFinal - filaInicio) + 1).shiftRowGroupDepth(1);
-
-    hoja.insertRowAfter(filaFinal);
-    const filaGris  = filaFinal + 1;
-    const rangoGris = hoja.getRange(filaGris, 1, 1, 7);
-    try { rangoGris.shiftRowGroupDepth(-1); } catch(err){}
-    hoja.getRange(filaGris, 5).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
-    rangoGris.setBackground("#f3f3f3");
-    aplicarFormatoFila(rangoGris);
-
-    hoja.insertRowsAfter(filaGris, 5);
-    const rangoAire = hoja.getRange(filaGris + 1, 1, 5, 7);
-    hoja.getRange(3, 1, 1, 7).copyTo(rangoAire);
-    rangoAire.clearContent();
-    aplicarFormatoFila(rangoAire);
-
-    hoja.collapseAllRowGroups();
-    ss.toast("Cierre completado. Formato listo.", "✅");
-  } catch (err) {}
+  hoja.collapseAllRowGroups();
+  ss.toast(`Cierre completado. Jornadas cerradas: ${cierres}`, "✅");
 }
 
 function extenderTabla150(hoja) {
@@ -359,53 +394,88 @@ function buscarUltimaFilaReal(hoja) {
 
 
 function finalizarJornadaReciente() {
-  const ss         = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja       = ss.getSheetByName("SALIDAS");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = ss.getSheetByName("SALIDAS");
   if (!hoja) return;
 
-  const ultimaFila = hoja.getLastRow();
-  if (ultimaFila <= 2) return;
+  const FILA_INICIO = 3;
+  const COL_A = 1;
+  const COL_B = 2;
+  const COL_D = 4;
+  const COL_E = 5;
+  const TOTAL_COLS = 7;
+  const MARCA_CIERRE = "DIA CERRADO";
 
-  const datosB  = hoja.getRange(3, 2, ultimaFila - 2).getValues();
-  let filaFinal = -1;
-  let fechaE    = new Date();
+  let ultimaFila = hoja.getLastRow();
+  if (ultimaFila < FILA_INICIO) return;
 
-  for (let i = datosB.length - 1; i >= 0; i--) {
-    if (datosB[i][0] !== "") {
-      filaFinal = i + 3;
-      const valFecha = hoja.getRange(filaFinal, 5).getValue();
+  let fila = FILA_INICIO;
+  let cierres = 0;
+
+  while (fila <= ultimaFila) {
+    const valorB = hoja.getRange(fila, COL_B).getValue();
+
+    if (valorB === "") {
+      fila++;
+      continue;
+    }
+
+    const inicioBloque = fila;
+    let finBloque = fila;
+    const fechaBase = hoja.getRange(fila, COL_E).getValue();
+
+    while (finBloque + 1 <= ultimaFila) {
+      const siguienteB = hoja.getRange(finBloque + 1, COL_B).getValue();
+      const siguienteFecha = hoja.getRange(finBloque + 1, COL_E).getValue();
+      const mismaFecha = (fechaBase instanceof Date && siguienteFecha instanceof Date)
+        ? fechaBase.toDateString() === siguienteFecha.toDateString()
+        : false;
+
+      if (siguienteB !== "" && mismaFecha) finBloque++;
+      else break;
+    }
+
+    const filaSiguiente = finBloque + 1;
+    let yaCerrado = false;
+    if (filaSiguiente <= hoja.getMaxRows()) {
+      const marca = String(hoja.getRange(filaSiguiente, COL_D).getValue()).trim().toUpperCase();
+      yaCerrado = marca === MARCA_CIERRE;
+    }
+
+    if (!yaCerrado) {
+      let fechaE = new Date();
+      const valFecha = hoja.getRange(finBloque, COL_E).getValue();
       if (valFecha instanceof Date) fechaE = valFecha;
-      break;
+
+      hoja.getRange(inicioBloque, 1, (finBloque - inicioBloque) + 1).shiftRowGroupDepth(1);
+
+      hoja.insertRowAfter(finBloque);
+      const filaGris = finBloque + 1;
+      const rangoGris = hoja.getRange(filaGris, 1, 1, TOTAL_COLS);
+
+      try { rangoGris.shiftRowGroupDepth(-1); } catch (err) {}
+
+      hoja.getRange(filaGris, COL_D).setValue(MARCA_CIERRE).setFontWeight("bold");
+      hoja.getRange(filaGris, COL_E).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
+      rangoGris.setBackground("#f3f3f3");
+      aplicarFormatoFila(rangoGris);
+
+      hoja.insertRowsAfter(filaGris, 5);
+      const rangoAire = hoja.getRange(filaGris + 1, 1, 5, TOTAL_COLS);
+      hoja.getRange(FILA_INICIO, 1, 1, TOTAL_COLS).copyTo(rangoAire);
+      rangoAire.clearContent();
+      aplicarFormatoFila(rangoAire);
+
+      cierres++;
+      fila = filaGris + 6;
+      ultimaFila = hoja.getLastRow();
+    } else {
+      fila = finBloque + 1;
     }
   }
-  if (filaFinal === -1) return;
 
-  let filaInicio = filaFinal;
-  for (let j = filaFinal; j >= 3; j--) {
-    if (hoja.getRange(j, 2).getValue() !== "") filaInicio = j;
-    else break;
-  }
-
-  try {
-    hoja.getRange(filaInicio, 1, (filaFinal - filaInicio) + 1).shiftRowGroupDepth(1);
-
-    hoja.insertRowAfter(filaFinal);
-    const filaGris  = filaFinal + 1;
-    const rangoGris = hoja.getRange(filaGris, 1, 1, 7);
-    try { rangoGris.shiftRowGroupDepth(-1); } catch(err){}
-    hoja.getRange(filaGris, 5).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
-    rangoGris.setBackground("#f3f3f3");
-    aplicarFormatoFila(rangoGris);
-
-    hoja.insertRowsAfter(filaGris, 5);
-    const rangoAire = hoja.getRange(filaGris + 1, 1, 5, 7);
-    hoja.getRange(3, 1, 1, 7).copyTo(rangoAire);
-    rangoAire.clearContent();
-    aplicarFormatoFila(rangoAire);
-
-    hoja.collapseAllRowGroups();
-    ss.toast("Cierre completado. Formato listo.", "✅");
-  } catch (err) {}
+  hoja.collapseAllRowGroups();
+  ss.toast(`Cierre completado. Jornadas cerradas: ${cierres}`, "✅");
 }
 
 function corregirFechasEntradas() {
