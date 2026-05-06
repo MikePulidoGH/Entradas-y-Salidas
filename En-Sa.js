@@ -359,54 +359,108 @@ function buscarUltimaFilaReal(hoja) {
 
 
 function finalizarJornadaReciente() {
-  const ss         = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja       = ss.getSheetByName("SALIDAS");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = ss.getSheetByName("SALIDAS");
   if (!hoja) return;
 
-  const ultimaFila = hoja.getLastRow();
-  if (ultimaFila <= 2) return;
+  const FILA_INICIO = 3;
+  const COL_B = 2; // Columna B: referencia de fila con movimiento
+  const COL_D = 4; // Columna D: marca DIA CERRADO
+  const COL_E = 5; // Columna E: fecha
+  const TOTAL_COLS = 7;
+  const MARCA_CIERRE = "DIA CERRADO";
 
-  const datosB  = hoja.getRange(3, 2, ultimaFila - 2).getValues();
-  let filaFinal = -1;
-  let fechaE    = new Date();
+  let ultimaFila = hoja.getLastRow();
+  if (ultimaFila < FILA_INICIO) return;
 
-  for (let i = datosB.length - 1; i >= 0; i--) {
-    if (datosB[i][0] !== "") {
-      filaFinal = i + 3;
-      const valFecha = hoja.getRange(filaFinal, 5).getValue();
-      if (valFecha instanceof Date) fechaE = valFecha;
-      break;
+  // Lee TODO de una vez para evitar lecturas inconsistentes
+  const cantidad = ultimaFila - FILA_INICIO + 1;
+  const dataB = hoja.getRange(FILA_INICIO, COL_B, cantidad, 1).getValues();           // valores reales
+  const dataEVisible = hoja.getRange(FILA_INICIO, COL_E, cantidad, 1).getDisplayValues(); // fecha visible
+  const dataEReal = hoja.getRange(FILA_INICIO, COL_E, cantidad, 1).getValues();        // fecha real
+
+  // Normaliza fecha visible a "dd/mm/yyyy"
+  const fechaVisible = (txt) => {
+    const s = String(txt || "").trim();
+    if (!s) return "";
+    const soloFecha = s.split(" ")[0].trim(); // quita hora si existe
+    return soloFecha;
+  };
+
+  // Armamos bloques por fecha visible y B no vacía
+  const bloques = [];
+  let i = 0;
+  while (i < cantidad) {
+    const b = dataB[i][0];
+    const f = fechaVisible(dataEVisible[i][0]);
+
+    if (b === "" || f === "") {
+      i++;
+      continue;
     }
+
+    const inicio = i;
+    let fin = i;
+
+    while (fin + 1 < cantidad) {
+      const bSig = dataB[fin + 1][0];
+      const fSig = fechaVisible(dataEVisible[fin + 1][0]);
+      if (bSig !== "" && fSig === f) fin++;
+      else break;
+    }
+
+    bloques.push({ inicioAbs: FILA_INICIO + inicio, finAbs: FILA_INICIO + fin, fechaKey: f });
+    i = fin + 1;
   }
-  if (filaFinal === -1) return;
 
-  let filaInicio = filaFinal;
-  for (let j = filaFinal; j >= 3; j--) {
-    if (hoja.getRange(j, 2).getValue() !== "") filaInicio = j;
-    else break;
+  if (bloques.length === 0) {
+    ss.toast("No hay bloques para cerrar.", "ℹ️");
+    return;
   }
 
-  try {
-    hoja.getRange(filaInicio, 1, (filaFinal - filaInicio) + 1).shiftRowGroupDepth(1);
+  // Procesar de abajo hacia arriba para que inserciones no desplacen pendientes
+  let cierres = 0;
+  for (let k = bloques.length - 1; k >= 0; k--) {
+    const { inicioAbs, finAbs } = bloques[k];
+    const filaSiguiente = finAbs + 1;
 
-    hoja.insertRowAfter(filaFinal);
-    const filaGris  = filaFinal + 1;
-    const rangoGris = hoja.getRange(filaGris, 1, 1, 7);
-    try { rangoGris.shiftRowGroupDepth(-1); } catch(err){}
-    hoja.getRange(filaGris, 5).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
+    // Si ya está cerrada, saltar
+    const marca = String(hoja.getRange(filaSiguiente, COL_D).getValue()).trim().toUpperCase();
+    if (marca === MARCA_CIERRE) continue;
+
+    // Fecha para fila gris: usar fecha real del fin de bloque; si no sirve, hoy
+    let fechaE = hoja.getRange(finAbs, COL_E).getValue();
+    if (!(fechaE instanceof Date) || isNaN(fechaE)) fechaE = new Date();
+
+    // Agrupar bloque
+    hoja.getRange(inicioAbs, 1, (finAbs - inicioAbs) + 1).shiftRowGroupDepth(1);
+
+    // Insertar fila gris
+    hoja.insertRowAfter(finAbs);
+    const filaGris = finAbs + 1;
+    const rangoGris = hoja.getRange(filaGris, 1, 1, TOTAL_COLS);
+
+    try { rangoGris.shiftRowGroupDepth(-1); } catch (err) {}
+
+    hoja.getRange(filaGris, COL_D).setValue(MARCA_CIERRE).setFontWeight("bold");
+    hoja.getRange(filaGris, COL_E).setValue(fechaE).setNumberFormat("dd/mm/yyyy").setFontWeight("bold");
     rangoGris.setBackground("#f3f3f3");
     aplicarFormatoFila(rangoGris);
 
+    // Insertar 5 filas "aire"
     hoja.insertRowsAfter(filaGris, 5);
-    const rangoAire = hoja.getRange(filaGris + 1, 1, 5, 7);
-    hoja.getRange(3, 1, 1, 7).copyTo(rangoAire);
+    const rangoAire = hoja.getRange(filaGris + 1, 1, 5, TOTAL_COLS);
+    hoja.getRange(FILA_INICIO, 1, 1, TOTAL_COLS).copyTo(rangoAire);
     rangoAire.clearContent();
     aplicarFormatoFila(rangoAire);
 
-    hoja.collapseAllRowGroups();
-    ss.toast("Cierre completado. Formato listo.", "✅");
-  } catch (err) {}
+    cierres++;
+  }
+
+  hoja.collapseAllRowGroups();
+  ss.toast(`Cierre completado. Jornadas cerradas: ${cierres}`, "✅");
 }
+
 
 function corregirFechasEntradas() {
   const ss   = SpreadsheetApp.getActiveSpreadsheet();
